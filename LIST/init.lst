@@ -1,0 +1,341 @@
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE INIT
+OBJECT MODULE PLACED IN .\OUT\init.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\init.c LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\ini
+                    -t.lst) OBJECT(.\OUT\init.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : HSENC LOUVER System                                                   =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : GPR / ROBOTKING                                                               =
+  13                  = Rev                   : 20.07.20                                                                              =
+  14                  = Date                  : Start[20.07.20] ~ End[20.07.xx]                               =
+  15                  =================================================================
+  16          */
+  17          
+  18          #include <intrins.h>
+  19          #include "Typech.h"
+  20          #include "mc96f8316.h"
+  21          #include "define.h"
+  22          #include "func.h"
+  23          #include "ram.h"
+  24          
+  25          // WTDR
+  26          #define WTCL  7
+  27          #define WDTEN 7
+  28          
+  29          void WDT_enable(void)
+  30          {
+  31   1              WDTCR|=(1<<WDTEN); // wdt enable
+  32   1      }
+  33          
+  34          void WDT_disable(void)
+  35          {
+  36   1              WDTCR&=~(1<<WDTEN); // wdt disable
+  37   1      }
+  38          
+  39          /* =====================        Watch dog define ============   */
+  40          void WDT_clear()
+  41          {
+  42   1              WDTCR |= 0x20;          // Clear Watch-dog timer
+  43   1      }
+  44          
+  45          void WDT_init()
+  46          {
+  47   1              // initialize Watch-dog timer
+  48   1              WDTDR = 0x01;           // period
+  49   1              WDTCR = 0xC2;           // setting
+  50   1              WDT_clear();
+  51   1      }
+  52          
+  53          /* =====================        ADC define ============ */
+  54          
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 2   
+
+  55          #define ADST            0x40            // ADC conversion start
+  56          #define AFLAG           0x10            // ADC conversion completed?
+  57          
+  58          unsigned int ADC_read()
+  59          {
+  60   1              unsigned int adcVal,dd=0x40;;
+  61   1              
+  62   1              while(!(ADCCRL & AFLAG)&& --dd);        // wait ADC busy
+  63   1              adcVal = (ADCDRH << 8) | ADCDRL;        // read ADC
+  64   1              return  adcVal>>2;                                      // 12bit>>2 = 10bit
+  65   1      }
+  66          
+  67          void ADC_init()
+  68          {
+  69   1              // initialize A/D convertor
+  70   1              ADCCRL = 0x80;          // setting
+  71   1              ADCCRH = 0x07;          // trigger source, alignment, frequency
+  72   1              ADWCRL = 0x00;          // Wake-up enable Low
+  73   1              ADWCRH = 0x00;          // Wake-up enable High
+  74   1              ADWRCR0 = 0x00;         // Wake-up R selection
+  75   1              ADWRCR1 = 0x00;         // Wake-up R selection
+  76   1              ADWRCR2 = 0x00;         // Wake-up R selection
+  77   1              ADWRCR3 = 0x00;         // Wake-up R selection
+  78   1      }
+  79          
+  80          void ADC_start(unsigned char ch)
+  81          {
+  82   1              // start A/D convertor
+  83   1              ADCCRL = (ADCCRL & 0xf0) | (ch & 0x0f); // select channel
+  84   1              ADCCRL |= ADST;                                                 // start ADC
+  85   1      }
+  86          
+  87          
+  88          /* =====================        Timer0 interrupt deine ============     */
+  89          // T0CR
+  90          #define T0EN    7
+  91          #define T1EN    7
+  92          #define T2EN    7
+  93          #define T0MS0   4
+  94          #define T0CK0   1
+  95          #define T0CC    0
+  96          
+  97          void Timer0_init()
+  98          {
+  99   1              // initialize Timer0
+ 100   1              // 8bit timer, period = 2.000000mS
+ 101   1              T0CR = 0x88;            // timer setting
+ 102   1              T0DR = 0xF9;            // period count
+ 103   1              IE2 |= 0x02;            // Enable Timer0 interrupt
+ 104   1              T0CR |= 0x01;           // clear counter
+ 105   1      }
+ 106          
+ 107          void Timer1_init()
+ 108          {
+ 109   1              // initialize Timer1
+ 110   1              // 16bit PWM, period = 0.066687mS ( 14995.313964Hz )
+ 111   1              //     PWM duty = 49.953140%
+ 112   1      //      T1CRH = 0x20;           // PWM setting High, 1 shot mode
+ 113   1              T1CRH |= 0x30;          // PWM repeat mode
+ 114   1              T1CRL = 0xC0;           // PWM setting Low
+ 115   1              T1BDRH = 0x02;          // duty High
+ 116   1              T1BDRL = 0x16;          // duty Low
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 3   
+
+ 117   1              T1ADRH = 0x04;          // period count High
+ 118   1              T1ADRL = 0x2A;          // period count Low
+ 119   1              timer1_stop();
+ 120   1      }
+ 121          
+ 122          void timer1_start(void)
+ 123          {
+ 124   1              DATA16 = cPWM_INIT;
+ 125   1              PO_MOTORPWM  = CLR;     // LED Pwm OFF 
+ 126   1              T1CRH|=(1<<T1EN);       // Timer1(16bit)  enable
+ 127   1      }
+ 128          
+ 129          void timer1_stop(void)
+ 130          {
+ 131   1              DATA16 = cPWM_INIT;
+ 132   1              PO_MOTORPWM  = CLR;   // LED Pwm OFF 
+ 133   1              T1CRH&=~(1<<T1EN);      // Timer1(16bit)  disable
+ 134   1      }
+ 135          
+ 136          void Timer2_init()
+ 137          {
+ 138   1              // initialize Timer2
+ 139   1              // 16bit timer, period = 0.500000mS
+ 140   1              T2CRH = 0x00;           // timer setting High
+ 141   1              T2CRL = 0xC0;           // timer setting Low
+ 142   1              T2ADRH = 0x1F;          // period count High
+ 143   1              T2ADRL = 0x3F;          // period count Low
+ 144   1              IE2 |= 0x08;            // Enable Timer2 interrupt
+ 145   1              T2CRH |= 0x80;          // enable counter
+ 146   1      }
+ 147          
+ 148          /* =====================        OSC stabilization time ============     */
+ 149          void Clock_init()
+ 150          {
+ 151   1              // internal RC clock (16.000000MHz)
+ 152   1              //Xout_Xin function setting
+ 153   1      
+ 154   1              /*--- Oscillator Control ---------------------------------------------------------------- 
+ 155   1               * OSCCR        : 0000 0000 = 0x00                      : Oscillator Control Register
+ 156   1               * OSCCR        = 0x00;                 // initial int_1Mhz,int_osc enable,main_osc enable,sub_osc enalbe        
+ 157   1               *-----------------------------------------------------------------------------------
+ 158   1               */
+ 159   1              OSCCR =0        //Oscillator Control Register
+ 160   1                      |(5<<3) //0:int_0_5Mhz, 1:int_1Mhz, 2:int_2Mhz, 3: int_4Mhz     4:int_8Mhz, 5: int_16Mhz 
+ 161   1                      |(0<<2) //0:int_rc_osc enable, 1:int_rc_osc disable     
+ 162   1                      |(0<<1) //0:main_osc disable, 1:main_osc enable
+ 163   1                      |(0<<0) //0:sub_osc disable, 1:sub_osc enable
+ 164   1                      //|(1<<0)       //0:sub_osc disable, 1:sub_osc enable
+ 165   1                      ;
+ 166   1              BITCR=(1<<3)|(1<<0);    // BIT counter clear!!
+ 167   1              while((BITCR&0x80)==0); // BIT 안정화 16ms wait time @ int_osc 1Mhz
+ 168   1              
+ 169   1              /*--- Set System and Clock Control ------------------------------------------------------ 
+ 170   1               * SCCR         : 0000 0000 = 0x00                      : System and Clock Control Register.
+ 171   1               * SCCR = 0x01;                                 // -,-,-,-,-,-,sclk1,sclk0
+ 172   1               *-----------------------------------------------------------------------------------
+ 173   1               */
+ 174   1              SCCR =0         //System and Clock Control Register
+ 175   1                      |(0<<0) //0:INT_RC OSC, 1:external OSC, 2:external sub_osc[1]
+ 176   1                      ;       
+ 177   1      }
+ 178          
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 4   
+
+ 179          void Port_init()
+ 180          {
+ 181   1              // initialize ports
+ 182   1              //   1 : P35      out relay
+ 183   1              //   5 : RXD      in  rxd
+ 184   1              //   6 : TXD      out txd
+ 185   1              //   9 : P24      out led5
+ 186   1              //  10 : P23      out led4
+ 187   1              //  11 : P22      out led3
+ 188   1              //  12 : P21      out led2
+ 189   1              //  13 : P20      out led1
+ 190   1              //  14 : P17      out com2
+ 191   1              //  15 : P16      out com1
+ 192   1              //  16 : P15      in  run switch
+ 193   1              //  17 : P14      in  foot switch
+ 194   1              //  18 : P13      in  limit switch
+ 195   1              //  19 : PWM1o    out motor pwm
+ 196   1              //  24 : AN4      in  adc temp
+ 197   1              //  25 : AN3      in  adc rpm
+ 198   1              //  26 : AN2      in  adc ocr
+ 199   1              //  31 : P37      in  dip1
+ 200   1              //  32 : P36      in  dip2
+ 201   1              
+ 202   1              P0IO = 0xE3;            // direction
+ 203   1              P0PU = 0x00;            // pullup
+ 204   1              P0OD = 0x00;            // open drain
+ 205   1              P03DB = 0x00;           // bit7~6(debounce clock), bit5~0=P35,P06~02 debounce
+ 206   1              P0   = 0x00;            // port initial value
+ 207   1      
+ 208   1              P1IO = 0xC7;            // direction
+ 209   1              P1PU = 0x38;            // pullup
+ 210   1              P1OD = 0x38;            // open drain
+ 211   1              P12DB = 0x08;           // debounce : P23~20, P13~10
+ 212   1              P1   = 0x00;            // port initial value
+ 213   1      
+ 214   1              P2IO = 0xFF;            // direction
+ 215   1              P2PU = 0x00;            // pullup
+ 216   1              P2OD = 0x00;            // open drain
+ 217   1              P2   = 0x00;            // port initial value
+ 218   1      
+ 219   1              P3IO = 0x3D;            // direction
+ 220   1              P3PU = 0xC2;            // pullup
+ 221   1              P3OD = 0xC2;            // open drain
+ 222   1              P3   = 0x00;            // port initial value
+ 223   1      
+ 224   1              // Set port functions
+ 225   1              P0FSR = 0x38;           // P0 selection
+ 226   1              P1FSRH = 0x00;          // P1 selection High
+ 227   1              P1FSRL = 0x08;          // P1 selection Low
+ 228   1              P2FSR = 0x00;           // P2 selection
+ 229   1              P3FSR = 0x01;           // P3 selection
+ 230   1      
+ 231   1              LVRCR = 0x00;           //LVREN[0]= 0: LVR enable, 1:LVR disable         //1.6v LVR Voltage Select
+ 232   1      }
+ 233          
+ 234          /**/
+ 235          /*                      Ram initalize routine                                  */
+ 236          /**/
+ 237          void Ram_init(void)
+ 238          {
+ 239   1              unsigned int i;
+ 240   1              
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 5   
+
+ 241   1              i = 20000;
+ 242   1              
+ 243   1              delay_xms(200);
+ 244   1      
+ 245   1              do{
+ 246   2                      if( !PI_JIG ) ++i;
+ 247   2                      else --i;
+ 248   2                      WDT_clear();
+ 249   2                      if( i>40000 || i<100 ) break;
+ 250   2              }while(1);
+ 251   1      
+ 252   1              Motor_RPM_old = Motor_RPM = 0;
+ 253   1              Mode_Key_old = Mode_Key = 0;;
+ 254   1              Clean_KeyTimer=0;
+ 255   1              IS_Checker = 0;
+ 256   1              fKEY_Init=OFF;
+ 257   1              fCLEAN_Init=OFF;
+ 258   1              Disp_ModeTimer = cS100MS3S;
+ 259   1              Mode_Key = cNORMAL_MODE;
+ 260   1              Dipkeyin=0;
+ 261   1      
+ 262   1      /*
+ 263   1              -------------------------------------------------------------
+ 264   1                                              |       Model(0:Sheo/1:Dress)
+ 265   1              ----------------+--------------------------------------------
+ 266   1                      PI_DIP1         |       PI_DIP2(Model)
+ 267   1              ----------------+--------------------------------------------
+ 268   1              [0x00]  0               |               0       --> Normal mode
+ 269   1              ----------------+--------------------------------------------
+ 270   1              [0x01]  0               |               1       --> Speed change 80->90%        
+ 271   1              ----------------+--------------------------------------------
+ 272   1              [0x02]  1               |               0       --> Test mode(무부하 감지 삭제)
+ 273   1              ----------------+--------------------------------------------
+ 274   1              [0x04]  1               |               1       --> x
+ 275   1              -------------------------------------------------------------
+ 276   1      */
+ 277   1      
+ 278   1              if( PI_DIP1 )   // dip init value = 3;
+ 279   1              {
+ 280   2                      if( PI_DIP2 ) Dipkeyin = 0x00;
+ 281   2                      else Dipkeyin = 0x01;   
+ 282   2              }else
+ 283   1              {                               
+ 284   2                      if( PI_DIP2 ) Dipkeyin = 0x02;
+ 285   2                      else Dipkeyin = 0x04;   
+ 286   2              }
+ 287   1              
+ 288   1              if( Dipkeyin & 0x02 ) IS_Checker = 1;   // test mode
+ 289   1      
+ 290   1      #if cEEPROM
+ 291   1              Lflash_read(cSector);
+ 292   1              if( Read_Data[0] == 0x55 ) 
+ 293   1              {
+ 294   2                      Motor_RPM = Read_Data[1];
+ 295   2                      Motor_RPM_old = Motor_RPM;
+ 296   2                      Mode_Key = Read_Data[2];
+ 297   2              }
+ 298   1      #endif
+ 299   1              
+ 300   1      }
+ 301          
+ 302          
+C51 COMPILER V9.00   INIT                                                                  12/09/2021 13:13:38 PAGE 6   
+
+ 303          /* EOF  */
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    452    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       2
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

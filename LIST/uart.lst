@@ -1,0 +1,315 @@
+C51 COMPILER V9.00   UART                                                                  12/09/2021 13:13:39 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE UART
+OBJECT MODULE PLACED IN .\OUT\uart.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\uart.c LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\uar
+                    -t.lst) OBJECT(.\OUT\uart.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : HSENC LOUVER System                                                   =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : GPR / ROBOTKING                                                               =
+  13                  = Rev                   : 20.07.20                                                                              =
+  14                  = Date                  : Start[20.07.20] ~ End[20.07.xx]                               =
+  15                  =================================================================
+  16          */
+  17          
+  18          #include <intrins.h>
+  19          #include "Typech.h"
+  20          #include "mc96f8316.h"
+  21          #include "define.h"
+  22          #include "func.h"
+  23          #include "ram.h"
+  24          #include "uart.h"
+  25          
+  26          
+  27          /*
+  28          #define INT_RXMODE      1
+  29          #define INT_TXMODE      0
+  30          
+  31          //#define INT_MODE      0
+  32          
+  33          #define BUF_SIZE        16
+  34          
+  35          #define RXBUF_SIZE      BUF_SIZE
+  36          #define TXBUF_SIZE      BUF_SIZE
+  37          
+  38          char _rxq[RXBUF_SIZE];
+  39          char _txq[TXBUF_SIZE];
+  40          int _rxcnt,_rxicnt,_rxocnt;
+  41          int _txcnt,_txicnt,_txocnt;
+  42          */
+  43          
+  44          /*
+  45                  9600 Baudrate = 1byte = 1ms
+  46                  38400 Baudrate = 1byte = 1ms/4 = 256us
+  47          */
+  48          #if cRS232C
+              void UART_init()
+              {
+                      // initialize UART interface
+                      // ASync. 38461bps N 8 1
+              //      _rxcnt=_rxicnt=_rxocnt=0;
+              //      _txcnt=_txicnt=_rxocnt=0;
+C51 COMPILER V9.00   UART                                                                  12/09/2021 13:13:39 PAGE 2   
+
+                      
+                      TX_DATA_counter = 0;
+                      RX_DATA_counter = 0;
+                      RX_CHECKSUM = 0;
+              
+                      UARTCR2 = 0x02;         // activate UART
+                      UARTCR1 = 0x06;         // bit count, parity
+                      UARTCR2 |= 0xAC;        // interrupt, speed
+                      UARTCR3 = 0x00;         // stop bit
+              //      UARTBD = 0x19;          // baud rate = fsclk/(16*(ubaud+1)) 16000000/(16*38400) -1= 25(38461)
+                      UARTBD = 0x67;          // baud rate = 9600
+                      IE1=0 
+              //              |(1<<5) // ADC Wake-up
+                              |(1<<4) // UART Tx
+                              |(1<<3) // UART Rx
+              //              |(1<<2) // I2C
+              //              |(1<<1) // EINT6
+              //              |(1<<0) // EINT5                
+                              ;
+                      UARTCR2&=~(UDRIE+TXCIE);        
+              
+              }
+              
+              void UART_write(unsigned char dat)
+              {
+                      while(!(UARTST & 0x80));        // wait
+                      UARTDR = dat;           // write
+              }
+              
+              unsigned char UART_read()
+              {
+                      unsigned char dat;
+                      
+                      while(!(UARTST & 0x20));        // wait
+                      dat = UARTDR;                           // read
+                      return  dat;
+              }
+              
+              #endif
+  94          
+  95          void RX_Int(void) interrupt 9
+  96          {
+  97   1              RX_DATA = UARTDR;
+  98   1              
+  99   1              RXCOMM_BUFF[RX_DATA_counter] = RX_DATA;
+ 100   1              switch( RX_DATA_counter )
+ 101   1              {
+ 102   2                      case 0:
+ 103   2                              if( RX_DATA == cHEADER_CODE )
+ 104   2                              {
+ 105   3                                      RX_CHECKSUM = RX_DATA;
+ 106   3                                      ++RX_DATA_counter;
+ 107   3                              }else RX_DATA_counter = 0;
+ 108   2                              break;
+ 109   2                      case 1:
+ 110   2                      case 2:
+ 111   2                      case 3:
+ 112   2                              RX_CHECKSUM += RX_DATA;
+ 113   2                              ++RX_DATA_counter;
+ 114   2                              break;
+ 115   2                      case 4:
+ 116   2                              RX_DATA_counter = 0;
+C51 COMPILER V9.00   UART                                                                  12/09/2021 13:13:39 PAGE 3   
+
+ 117   2                              if( RX_CHECKSUM == RX_DATA )
+ 118   2                              {
+ 119   3                                      fRX_COMPLETED = ON;
+ 120   3                                      RX_COMMAND = RXCOMM_BUFF[1];
+ 121   3                                      RX_DATA1 = RXCOMM_BUFF[2];
+ 122   3                                      RX_TEMP = RXCOMM_BUFF[3];
+ 123   3                                      RX_CHECKSUM = 0;
+ 124   3                                      TX_DATA1 = 0x55;
+ 125   3                                      TX_DELAY = cS10MS020mS;
+ 126   3                                      RX_Watchdog = 0;                        // watchdog clear
+ 127   3                              }else 
+ 128   2                              {
+ 129   3                                      RX_CHECKSUM = 0;                                
+ 130   3                                      TX_DATA1 = 0x49;
+ 131   3                              }               
+ 132   2                              break;
+ 133   2              }
+ 134   1      }
+ 135          /*
+ 136          
+ 137          void RX_Int(void) interrupt 9
+ 138          {
+ 139                  char ch;
+ 140                  
+ 141                  ch=UARTDR;
+ 142          
+ 143                  if (_rxcnt<RXBUF_SIZE)
+ 144                  {
+ 145                          _rxcnt++;
+ 146                          _rxq[_rxicnt]=ch;
+ 147                          _rxicnt++;
+ 148                          if (_rxicnt==RXBUF_SIZE)
+ 149                                  _rxicnt=0;
+ 150                  }
+ 151          }
+ 152          */
+ 153          
+ 154          void TX_Int(void) interrupt 10
+ 155          {
+ 156   1              UARTDR=TXCOMM_BUFF[TX_DATA_counter];
+ 157   1      
+ 158   1              TX_DATA_counter++;
+ 159   1              if (TX_DATA_counter==TXBUF_SIZE)
+ 160   1              {       
+ 161   2                      TX_DATA_counter = 0;
+ 162   2                      RX_DATA_counter = 0;
+ 163   2                      UARTCR2&=~(UDRIE+TXCIE);        
+ 164   2              }       
+ 165   1      //      UARTCR2&=~(UDRIE+TXCIE);        
+ 166   1      }
+ 167          
+ 168          /*
+ 169          void TX_Int(void) interrupt 10
+ 170          {
+ 171                  if (_txcnt){
+ 172                          _txcnt--;
+ 173                          UARTDR=_txq[_txocnt];
+ 174          
+ 175                          _txocnt++;
+ 176                          if (_txocnt==TXBUF_SIZE)
+ 177                                  _txocnt=0;
+ 178                          if (_txcnt==0)
+C51 COMPILER V9.00   UART                                                                  12/09/2021 13:13:39 PAGE 4   
+
+ 179                                  UARTCR2&=~(UDRIE+TXCIE);        
+ 180                  }
+ 181          }
+ 182          */
+ 183          
+ 184          /*
+ 185          void uputch(char ch)
+ 186          {
+ 187          #if INT_TXMODE
+ 188                  while(_txcnt==TXBUF_SIZE);
+ 189                  
+ 190                  cli();
+ 191                  _txcnt++;
+ 192                  _txq[_txicnt]=ch;
+ 193                  _txicnt++;
+ 194                  if (_txicnt==TXBUF_SIZE)
+ 195                          _txicnt=0;
+ 196                  // TX interrtup enable
+ 197                  UARTCR2|=(TXCIE+UDRIE);
+ 198          
+ 199                  sei();  
+ 200          #else
+ 201                  while(!(UARTST&0x80));
+ 202                  UARTDR=ch;      
+ 203                  
+ 204          #endif
+ 205          }
+ 206          
+ 207          void uputs(char *s)
+ 208          {
+ 209                  while(*s)
+ 210                          uputch(*s++);   
+ 211          }
+ 212          
+ 213          char ugetch(void)
+ 214          {
+ 215                  char ch;
+ 216          #if INT_RXMODE
+ 217                  while(_rxcnt==0);
+ 218                  
+ 219                  cli();
+ 220                  _rxcnt--;
+ 221                  ch=_rxq[_rxocnt++];
+ 222                  if (_rxocnt==RXBUF_SIZE)
+ 223                          _rxocnt=0;
+ 224                  sei();
+ 225          #else
+ 226                  while((UARTST&0x20)!=0x20);
+ 227                  ch=UARTDR;      
+ 228          #endif 
+ 229                  return ch;
+ 230          }
+ 231          
+ 232          char ugetchar(char *ch)
+ 233          {
+ 234          #if INT_RXMODE  
+ 235                  if(_rxcnt){
+ 236                          cli();
+ 237                          _rxcnt--;
+ 238                          *ch=_rxq[_rxocnt++];
+ 239                          if (_rxocnt==RXBUF_SIZE)
+ 240                                  _rxocnt=0;
+C51 COMPILER V9.00   UART                                                                  12/09/2021 13:13:39 PAGE 5   
+
+ 241                          sei();
+ 242                          return 1;
+ 243                  }
+ 244          
+ 245                  *ch=0;
+ 246                  return 0;
+ 247          #else
+ 248                  while((UARTST&0x20)!=0x20);
+ 249                  *ch=UARTDR;     
+ 250                  return 1;
+ 251          #endif 
+ 252          
+ 253          }
+ 254          
+ 255          void uputhex(unsigned char ch)
+ 256          {
+ 257                  unsigned int temp;
+ 258                  char i;
+ 259          
+ 260                  for (i=1;i>=0;i--){
+ 261                          temp=ch;
+ 262                          temp>>=4*i;
+ 263                          temp&=0x0f;
+ 264          
+ 265                          if (temp>=10) {
+ 266                                  temp-=10;
+ 267                                  temp+='a';
+ 268                          }
+ 269                          else 
+ 270                                  temp+='0';
+ 271                          uputch(temp);
+ 272                  }
+ 273          }
+ 274          
+ 275          
+ 276          
+ 277          */
+ 278          
+ 279          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    230    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

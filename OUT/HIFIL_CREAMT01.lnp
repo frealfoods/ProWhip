@@ -1,0 +1,12 @@
+".\OUT\STARTUP.obj",
+".\OUT\main.obj",
+".\OUT\init.obj",
+".\OUT\int.obj",
+".\OUT\key.obj",
+".\OUT\util.obj",
+".\OUT\disp.obj",
+".\OUT\uart.obj" 
+TO ".\OUT\HIFIL_CREAMT01" 
+
+PRINT(".\LIST\HIFIL_CREAMT01.map") CLASSES (XDATA (X:0x0-X:0x1FF), HDATA (X:0x0-X:0x1FF), CODE (C:0x0-C:0x3FFF), CONST (C:0x0-C:0x3FFF), 
+ECODE (C:0x0-C:0x3FFF), HCONST (C:0x0-C:0x3FFF)) 

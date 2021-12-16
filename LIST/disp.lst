@@ -1,0 +1,125 @@
+C51 COMPILER V9.00   DISP                                                                  12/09/2021 13:13:39 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE DISP
+OBJECT MODULE PLACED IN .\OUT\disp.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\disp.c LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\dis
+                    -p.lst) OBJECT(.\OUT\disp.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : Food Processor MACHINE                                                =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : Gstrading / KJLEE                                                             =
+  13                  = Rev                   : 19.01.16                                                                              =
+  14                  = Date                  : Start[19.01.16] ~ End[19.01.xx]                               =
+  15                  =================================================================
+  16          */
+  17          
+  18          #include <intrins.h>
+  19          #include "Typech.h"
+  20          #include "mc96f8316.h"
+  21          #include "define.h"
+  22          #include "func.h"
+  23          #include "ram.h"
+  24          
+  25          void Display_off(void);
+  26          
+  27          code unsigned char      d_LEDSPEED[5] = { 0x10,0x08,0x04,0x02,0x01};
+  28          
+  29          void Disp_Proc(void)
+  30          {
+  31   1              switch( DigitRotate )
+  32   1              {
+  33   2                      case 0: // LED 5 = Motor speed
+  34   2                              PO_LED = d_LEDSPEED[Motor_RPM]; 
+  35   2                              PO_COM1 = ON;
+  36   2                              break;
+  37   2                      case 2: // LED 4 = Status Mode 
+  38   2                              PO_LED = 0x10;          // Power on
+  39   2                              if( Disp_ModeTimer )
+  40   2                              {
+  41   3                                      if( Mode_Key == cNORMAL_MODE )                                  // Normal mode
+  42   3                                      {
+  43   4                                              if( fBLINK ) PO_LED = 0x18;             // Power on & Ready
+  44   4                                      }else                                                           // Push toggle mode
+  45   3                                      {
+  46   4                                              if( fBLINK ) PO_LED = 0x1E;             // Blink Ready & Run & Check
+  47   4                                      }
+  48   3                              }else
+  49   2                              {
+  50   3                                      if( fREADY )
+  51   3                                      {
+  52   4                                              PO_LED = 0x18;                                  // Power on & Ready
+  53   4                                      }       
+  54   3                                      if( System_Error == 1)
+C51 COMPILER V9.00   DISP                                                                  12/09/2021 13:13:39 PAGE 2   
+
+  55   3      //                              if( System_Error )
+  56   3                                      {
+  57   4                                              PO_LED |= 0x02;                                                 // Check led    
+  58   4                                      }else
+  59   3                                      {       
+  60   4                                              if( fCLEAN_Init ) PO_LED |= 0x06;               // Run & Check led
+  61   4                                              else
+  62   4                                              {               
+  63   5                                                      if( fCHECK || fCLEAN_Standby )
+  64   5                                                      {
+  65   6                                                              if( fBLINK ) PO_LED |= 0x02;    // Check led            
+  66   6                                                      }
+  67   5                                                      if( (fRUN || fFOOT || fCLEAN_Standby ) && fBLINK ) PO_LED |= 0x04;      // Run Led blink
+  68   5                                              }       
+  69   4                                      }
+  70   3                              }
+  71   2                              
+  72   2                              PO_COM2 = ON;
+  73   2                              break;
+  74   2                      default:
+  75   2                              Display_off();  
+  76   2                              Key_Proc();
+  77   2                              break;
+  78   2              }       
+  79   1      
+  80   1              ++DigitRotate;
+  81   1              if( DigitRotate > 3 ) DigitRotate = 0;          // if use battery is DigitRotate > 19
+  82   1      }
+  83          
+  84          
+  85                  
+  86          void Display_off(void)
+  87          {
+  88   1              PO_COM1 = OFF;
+  89   1              PO_COM2 = OFF;
+  90   1              PO_LED &= 0x00;;
+  91   1      }       
+  92          
+  93          
+  94          /* EOF  */
+  95                  
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    202    ----
+   CONSTANT SIZE    =      5    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

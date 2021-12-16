@@ -1,0 +1,21 @@
+[Project ID]
+Signature=UE Proj: v.1
+[Project Information]
+Use Relative Directory=1
+Relative to Project File=1
+Include Sub Directories=1
+Project Tagfile=
+Project Wordfile=
+Filter=
+Create Tagfile=0
+[Files]
+0=init.c
+1=int.C
+2=main.c
+3=option.c
+4=util.C
+5=define.h
+6=Func.h
+7=ram.h
+8=readme.h
+9=Typech.h

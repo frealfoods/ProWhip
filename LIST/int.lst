@@ -1,0 +1,173 @@
+C51 COMPILER V9.00   INT                                                                   12/09/2021 13:13:38 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE INT
+OBJECT MODULE PLACED IN .\OUT\int.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\int.c LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\int.
+                    -lst) OBJECT(.\OUT\int.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : HSENC LOUVER System                                                   =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : GPR / ROBOTKING                                                               =
+  13                  = Rev                   : 20.07.20                                                                              =
+  14                  = Date                  : Start[20.07.20] ~ End[20.07.xx]                               =
+  15                  =================================================================
+  16          */
+  17          
+  18          #include <intrins.h>
+  19          #include "Typech.h"
+  20          #include "mc96f8316.h"
+  21          #include "define.h"
+  22          #include "func.h"
+  23          #include "ram.h"
+  24          
+  25          void EXT10_Int(void) interrupt 0
+  26          {}
+  27          void RESV0_Int(void) interrupt 3 
+  28          {}
+  29          void RESV1_Int(void) interrupt 4 
+  30          {}
+  31          void EXT0_4_Int(void) interrupt 5       // External interrupt 0 ~ 4 
+  32          {
+  33   1              EIFLAG0 = _0000_0000;           // External Interrupt Flag Register
+  34   1      }       
+  35          void EXT5_Int(void) interrupt 6
+  36          {}
+  37          void EXT6_Int(void) interrupt 7
+  38          {}
+  39          void I2C_Int(void) interrupt 8
+  40          {}
+  41          
+  42          /*
+  43          void RX_Int(void) interrupt 9
+  44          {}
+  45          void TX_Int(void) interrupt 10
+  46          {}
+  47          */
+  48          
+  49          void ADC_WAKE_UP(void) interrupt 11
+  50          {}
+  51          void TIMER0_OVER_FLOW_Int(void) interrupt 12
+  52          {}
+  53          void TIMER0_Int(void) interrupt 13
+  54          {
+C51 COMPILER V9.00   INT                                                                   12/09/2021 13:13:38 PAGE 2   
+
+  55   1              // Timer2 interrupt = 2ms
+  56   1              // TODO: add your code here
+  57   1              fTime_up = ON;
+  58   1      
+  59   1              if(++msec10 >= 5)                                       // 2ms x 5 = 10.24ms
+  60   1              {
+  61   2                      msec10 = 0;
+  62   2                      if( TX_DELAY ) --TX_DELAY;
+  63   2      
+  64   2                      if (++msec100 >= 10)                    // 10.24ms x 10 = 102.4msec
+  65   2                      {       
+  66   3                              msec100 = 0;
+  67   3                              fTime100m = ON;
+  68   3                              if( Start_DlyTimer ) --Start_DlyTimer;
+  69   3                              if( Disp_CleanTimer ) --Disp_CleanTimer;        
+  70   3                              if( Disp_ModeTimer ) --Disp_ModeTimer;
+  71   3                              Clean_Timer++;  
+  72   3                              ADC_CancelTimer++;
+  73   3                                      
+  74   3                              if( keyin && !fCLEAN_Standby && !fSYSTEM_Run )
+  75   3                              {       
+  76   4                                      if( Clean_KeyTimer++>30 ) 
+  77   4                                      {
+  78   5                                              fCLEAN_Standby = ON;
+  79   5                                              Disp_CleanTimer = cS100MS5S;
+  80   5                                      }       
+  81   4                              }else Clean_KeyTimer =0;
+  82   3                                      
+  83   3                              if(++sec05 >= 5)                                // 102.4 x 5 = 512msec
+  84   3                              {
+  85   4                                      sec05 = 0;
+  86   4                                      fBLINK ^= ON;
+  87   4                                      fTime500m = ON;
+  88   4                                      
+  89   4                                      if( ++sec >= 2 )
+  90   4                                      {
+  91   5                                              sec = 0;
+  92   5                                              if( fSYSTEM_Run ) 
+  93   5                                              {
+  94   6                                                      AUTO_Off_Timer++;
+  95   6                                              }else AUTO_Off_Timer = 0;
+  96   5      
+  97   5                                              if(++min >= 60)
+  98   5                                              {
+  99   6                                                      min = 0;
+ 100   6                                              }               
+ 101   5                                      }       
+ 102   4                              }
+ 103   3                      
+ 104   3                      }
+ 105   2              }       
+ 106   1      }
+ 107          
+ 108           void INT_Timer2() interrupt 15
+ 109          {
+ 110   1              if( (DigitRotate & 0x01) ) 
+ 111   1              { 
+ 112   2                      T2ADRH = 0x0F;          // period count High
+ 113   2                      T2ADRL = 0x3F;          // period count Low
+ 114   2              }else
+ 115   1              {
+ 116   2                      T2ADRH = 0x1F;          // period count High
+C51 COMPILER V9.00   INT                                                                   12/09/2021 13:13:38 PAGE 3   
+
+ 117   2                      T2ADRL = 0x3F;          // period count Low
+ 118   2              }
+ 119   1      
+ 120   1              T2CRH |= 0x01;                  // clear counter
+ 121   1      
+ 122   1              Disp_Proc();            
+ 123   1      }
+ 124          void RESV2_Int(void) interrupt 16
+ 125          {}
+ 126          void EXT7_A_Int(void) interrupt 17
+ 127          {}
+ 128          void ADC_Int(void) interrupt 18
+ 129          {}
+ 130          void SPI_Int(void) interrupt 19
+ 131          {}
+ 132          
+ 133          void WDT_Int(void) interrupt 21
+ 134          {}
+ 135          
+ 136          void INT_BIT() interrupt 22
+ 137          {}
+ 138          
+ 139          
+ 140          
+ 141          /* EOF  */
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    403    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

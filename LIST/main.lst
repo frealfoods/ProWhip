@@ -1,0 +1,535 @@
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\OUT\main.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\main.c LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\mai
+                    -n.lst) OBJECT(.\OUT\main.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : HSENC LOUVER System                                                   =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : GPR / ROBOTKING                                                               =
+  13                  = Rev                   : 20.07.20                                                                              =
+  14                  = Date                  : Start[20.07.20] ~ End[20.07.xx]                               =
+  15                  =================================================================
+  16                  = 수정내용 
+  17                   - 20.10.14 = 이사님 프로그램 2개만 부탁드려요.한개는 과부하 기준 28a. 
+  18                   - 하나는 과부하 기준 28a랑 스피드 1 40% 2 50% 3 56% 4  63% 5 70%
+  19          */
+  20          
+  21          #define ROOT
+  22          
+  23          #include <intrins.h>
+  24          #include "Typech.h"
+  25          #include "mc96f8316.h"
+  26          #include "define.h"
+  27          #include "func.h"
+  28          #include "ram.h"
+  29          #include "uart.h"
+  30          
+  31          void main(void);
+  32          
+  33          void Main_Proc(void);
+  34          void SequenceSort(unsigned int *base, int n);
+  35          
+  36          code unsigned int       d_TARGETPWM1[5] = { cPWM_MAX*0.4,cPWM_MAX*0.45,cPWM_MAX*0.5,cPWM_MAX*0.6,cPWM_MAX*0.65};
+  37          code unsigned int       d_TARGETPWM2[5] = { cPWM_MAX*0.5,cPWM_MAX*0.6,cPWM_MAX*0.7,cPWM_MAX*0.8,cPWM_MAX*0.9};
+  38          
+  39          /*********************************************************************************************************
+             -**************
+  40          * Function Name: main
+  41          * Description  : This function implements main function.
+  42          * Arguments    : None
+  43          * Return Value : None
+  44          **********************************************************************************************************
+             -*************/
+  45          void main(void)
+  46          {
+  47   1              cli();
+  48   1              WDT_init();
+  49   1              WDT_disable();
+  50   1              Port_init();
+  51   1              Clock_init();
+  52   1              Ram_init();
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 2   
+
+  53   1              
+  54   1              WDT_enable();
+  55   1              ADC_init();
+  56   1              Timer0_init();
+  57   1              Timer1_init();
+  58   1              Timer2_init();
+  59   1      #if cRS232C     
+                      UART_init();
+              #endif
+  62   1              timer1_start();
+  63   1              sei();
+  64   1                       
+  65   1          while (1U)
+  66   1          {
+  67   2                      if (fTime_up)                   // 2ms x 2 = 4ms
+  68   2                      {
+  69   3                              fTime_up = OFF;
+  70   3                              switch( Index )
+  71   3                              {
+  72   4                                      case 0:
+  73   4                                              Main_Proc();
+  74   4                                              ++Index;
+  75   4                                              break;
+  76   4                                      case 1:
+  77   4                                              WDT_clear();
+  78   4                                              Key_Proc1();
+  79   4                                              ADC_Proc();
+  80   4      #if cEEPROM     
+  81   4                                              EEPROM_Proc();
+  82   4      #endif
+  83   4                                              Index = 0;
+  84   4                                      default :
+  85   4                                              Index = 0;
+  86   4                                              break;
+  87   4                              }
+  88   3                      }
+  89   2              }
+  90   1      }
+  91          
+  92          /**/
+  93          /*             Main Procedure routine                                          */
+  94          /**/
+  95          //#define PI_DIP1                       (P3&0x40)       //(*(MB_BTF*)&P2).b6
+  96          //#define PI_DIP2                       (P3&0x80)       //(*(MB_BTF*)&P2).b7
+  97          /*
+  98                  -------------------------------------------------------------
+  99                                                  |       Model(0:Sheo/1:Dress)
+ 100                  ----------------+--------------------------------------------
+ 101                          PI_DIP1         |       PI_DIP2(Model)
+ 102                  ----------------+--------------------------------------------
+ 103                  [0]             0               |               0       --> 
+ 104                  ----------------+--------------------------------------------
+ 105                  [1]             1               |               0       -->     
+ 106                  ----------------+--------------------------------------------
+ 107                  [2]             0               |               1       --> 
+ 108                  ----------------+--------------------------------------------
+ 109                  [3]             1               |               1       --> 
+ 110                  -------------------------------------------------------------
+ 111          */
+ 112          
+ 113          void Main_Proc(void)
+ 114          {
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 3   
+
+ 115   1              if( fCLEAN_Standby && !Disp_CleanTimer ) fCLEAN_Standby = OFF;
+ 116   1      //      AUTO_Off_Timer = 10;            // 연속동작 허락 21.12.6
+ 117   1              if( !fREADY || System_Error || AUTO_Off_Timer > cAUOTOFFTIME )
+ 118   1              {
+ 119   2                      timer1_stop();
+ 120   2                      PO_RELAY = OFF;
+ 121   2                      fCLEAN_Init=OFF;
+ 122   2                      fRUN = OFF;
+ 123   2                      fFOOT = OFF;
+ 124   2                      fSYSTEM_Run = OFF;
+ 125   2                      if( AUTO_Off_Timer > cAUOTOFFTIME ) fAUTOOFF_Init = ON;
+ 126   2                      fCLEAN_Standby = OFF;
+ 127   2                      AUTO_Off_Timer = 0;
+ 128   2                      Disp_CleanTimer = 0;
+ 129   2              }else 
+ 130   1              {
+ 131   2                      if( fRUN || fFOOT || fCLEAN_Init )
+ 132   2                      {       
+ 133   3                              fSYSTEM_Run = ON;
+ 134   3                              if( Start_DlyTimer == 2 ) 
+ 135   3                              {
+ 136   4                                      timer1_start();
+ 137   4                                      Start_DlyTimer = 0;
+ 138   4                              }
+ 139   3                              
+ 140   3                              if( !fCLEAN_Init )
+ 141   3                              {               
+ 142   4                                      if( Dipkeyin == 1 ) TargetPWM = d_TARGETPWM2[Motor_RPM];
+ 143   4                                      else TargetPWM = d_TARGETPWM1[Motor_RPM];
+ 144   4                              }else
+ 145   3                              {
+ 146   4                                      switch( Clean_Index )
+ 147   4                                      {
+ 148   5                                              case 0:
+ 149   5                                                      Clean_Timer=0;
+ 150   5                                                      TargetPWM = cPWM_MAX*0.5;
+ 151   5                                                      Clean_Index++;
+ 152   5                                                      break;
+ 153   5      
+ 154   5                                              case 1: // Finish Clean mode
+ 155   5                                                      if( Clean_Timer>= cS100MS30S )
+ 156   5                                                      {
+ 157   6                                                              Clean_Timer=0;
+ 158   6                                                              Clean_Index=0;
+ 159   6                                                              fCLEAN_Init=OFF;
+ 160   6                                                              fRUN = OFF;
+ 161   6                                                              fFOOT = OFF;
+ 162   6                                                              Start_DlyTimer = cS100MS03S;
+ 163   6                                                              timer1_stop();
+ 164   6                                                      }       
+ 165   5                                                      break;
+ 166   5                                              default :
+ 167   5                                                      break;
+ 168   5                                      }
+ 169   4                              }                       
+ 170   3                              if( DATA16 < TargetPWM ) DATA16+=2;
+ 171   3                              else if( DATA16 > TargetPWM ) DATA16-=2;
+ 172   3                      
+ 173   3                      }else
+ 174   2                      {
+ 175   3                              if( Start_DlyTimer > 2 ) 
+ 176   3                              {
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 4   
+
+ 177   4                                      Start_DlyTimer = 2;
+ 178   4                                      timer1_stop();
+ 179   4                              }else if(!Start_DlyTimer)
+ 180   3                              {
+ 181   4                                      PO_RELAY = OFF;
+ 182   4                                      Start_DlyTimer = 0;
+ 183   4                                      fSYSTEM_Run = OFF;
+ 184   4                                      fCLEAN_Init = OFF;
+ 185   4                              }                       
+ 186   3                      }               
+ 187   2              }                                       
+ 188   1      
+ 189   1              T1BDR = DATA16;
+ 190   1      
+ 191   1      //      T1BDRH = DATA_H;        // duty High
+ 192   1      //      T1BDRL = DATA_L;        // duty Low
+ 193   1              
+ 194   1      #if cRS232C     
+              
+                      if( fRX_COMPLETED && !TX_DELAY )
+                      {
+                              fRX_COMPLETED = OFF;
+                              Comm_Proc();
+                      }
+              #endif
+ 202   1      }
+ 203          
+ 204          /*      ==============================================================================  */
+ 205          /*      ==============================================================================  */
+ 206          /*      ==============================================================================  */
+ 207          /*      =========       communication data format       =============   */
+ 208          /*      1Byte = [0xAE] cHEADER_CODE                                                             */
+ 209          /*      2Byte = [0xXX] Command                                                                  */
+ 210          /*      3Byte = [0xXX] data[0x55 = Rx Comm ok / 0x49 = err              */
+ 211          /*      4Byte = [0xXX] checksum(1B+2B+3B)                                               */
+ 212          /*      =====================================================   */
+ 213          /*      ==============================================================================  */
+ 214          /*      ==============================================================================  */
+ 215          /*      ==============================================================================  */
+ 216          #if cRS232C
+              void    Comm_Proc(void)
+              {
+                      unsigned char i;
+                      
+                      for(i=0;i<BUF_SIZE;i++)
+                      {
+                              TXCOMM_BUFF[i] = 0x89;
+                      }       
+              /*      ===============================         Transmit        ==============================  */
+                      TX_CHECKSUM = 0;
+                      TXCOMM_BUFF[0] = cHEADER_CODE;
+                      TX_CHECKSUM += cHEADER_CODE;
+              
+                      TXCOMM_BUFF[1] = TX_COMMAND;
+                      TX_CHECKSUM += TX_COMMAND;
+              
+                      TXCOMM_BUFF[2] = TX_DATA1;
+                      TX_CHECKSUM += TX_DATA1;
+              
+                      TX_DATA_counter = 0;
+                      TXCOMM_BUFF[3] = TX_CHECKSUM;
+                      UARTCR2|=(TXCIE+UDRIE); // TX interrtup enable
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 5   
+
+              }
+              #endif
+ 241          
+ 242          /*      ==============================================================================  */
+ 243          /*      ======================  AD Conversion routine ================================  */
+ 244          /*      ==============================================================================  */
+ 245          
+ 246          #define cADCOCR         2               // [ ch=2/OCR ]
+ 247          #define cADCRPM         3               // [ ch=3/RPM sensor]
+ 248          #define cADCTMP         4               // [ ch=4/Temp sensor]
+ 249          
+ 250          #define cADCSOFFSET      0
+ 251          /*
+ 252                  0.45V = 6.38A = 92
+ 253                  0.46V = 6.52A = 94
+ 254                  0.60V = 8.50A = 123
+ 255                  1.45V = 20.00A = 297
+ 256          */
+ 257          //#define cADCOCRL0S     55+cADCSOFFSET         // [ 3.8A ]
+ 258          #define cADCOCRL0S4A     58+cADCSOFFSET         // [ 4A ]
+ 259          #define cADCOCRL0S5A     73+cADCSOFFSET         // [ 4A ]
+ 260          #define cADCOCRL0S6A     86+cADCSOFFSET         // [ 6A ]
+ 261          #define cADCOCRL0S7A    100+cADCSOFFSET         // [ 7A ]
+ 262          #define cADCOCRL0S8A    115+cADCSOFFSET         // [ 8A ]
+ 263          #define cADCOCRL0S9A    130+cADCSOFFSET         // [ 9A ]
+ 264          #define cADCOCRL0S10A   144+cADCSOFFSET         // [ 10A ]
+ 265          #define cADCOCRL0S11A   159+cADCSOFFSET         // [ 11A ]
+ 266          #define cADCOCRL0S12A   173+cADCSOFFSET         // [ 12A ]
+ 267          #define cADCOCRL0S13A   188+cADCSOFFSET         // [ 13A ]
+ 268          #define cADCOCRL0S14A   202+cADCSOFFSET         // [ 14A ]
+ 269          //#define cADCOCRL0S     65+cADCSOFFSET         // [ 4.5A ]
+ 270          //#define cADCOCRL0S     72+cADCSOFFSET         // [ 5.0A ]
+ 271          //#define cADCOCRL0S     79+cADCSOFFSET         // [ 5.5A ]
+ 272          
+ 273          #define cADCOCRMAX      476                                     // [ 1.8V ]= 33A = 370
+ 274          
+ 275          code unsigned int       ADC_MOTCURRENT_DIP_TB[6]  = { cADCOCRL0S6A,cADCOCRL0S7A,cADCOCRL0S8A,cADCOCRL0S10A,cADCO
+             -CRL0S11A,cADCOCRL0S8A};
+ 276          code unsigned int       ADC_MOTCURRENT_DIP_TB1[6] = { cADCOCRL0S7A,cADCOCRL0S8A,cADCOCRL0S9A,cADCOCRL0S11A,cADCO
+             -CRL0S12A,cADCOCRL0S9A};
+ 277          
+ 278          /*
+ 279                  V = (i(10A) x r(0.015)) * 4.7 = 0.705 = 144
+ 280                  V = (i(12A) x r(0.015)) * 4.7 = 0.846 = 173
+ 281                  V = (i(14A) x r(0.015)) * 4.7 = 0.987 = 202
+ 282                  V = (i(25A) x r(0.015)) * 4.7
+ 283                  V = (i(28A) x r(0.015)) * 4.7 = 1.974 = 404
+ 284                  V = (i(30A) x r(0.015)) * 4.7 = 1.974 = 433
+ 285                  V = (i(33A) x r(0.015)) * 4.7 = 2.326 = 433
+ 286          */
+ 287          
+ 288          /*
+ 289          //순차 정렬(Sequential Sort)
+ 290           
+ 291          #define SWAP(a,b)  {int t; t = a; a=b; b=t;}//a와 b를 교환
+ 292           
+ 293           
+ 294          void SequenceSort(int *base, int n);
+ 295          int main(void)
+ 296          {
+ 297              int arr[10] = { 9,4,3,10,5,8,7,6,2,1 };
+ 298              SequenceSort(arr, 10);
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 6   
+
+ 299              return 0;
+ 300          }
+ 301           
+ 302          //정렬 과정을 출력하기 위한 함수입니다.
+ 303          void SequenceSort(int *base, int n)
+ 304          {
+ 305              int i, j;
+ 306              for (i = 0; i<n; i++)
+ 307              {
+ 308                  for (j = i; j<n; j++)
+ 309                  {
+ 310                      if (base[i]>base[j])                //앞쪽 원소가 더 크면
+ 311                      {
+ 312                          SWAP(base[i], base[j]); //교환
+ 313                      }
+ 314                  }
+ 315              }
+ 316          }
+ 317          */
+ 318          
+ 319          #define SWAP(a,b)  {unsigned int t; t = a; a=b; b=t;}   //a와 b를 교환
+ 320           
+ 321          void SequenceSort(unsigned int *base, int n)
+ 322          {
+ 323   1          int i, j;
+ 324   1          for (i = 0; i<n; i++)
+ 325   1          {
+ 326   2              for (j = i; j<n; j++)
+ 327   2              {
+ 328   3                  if (base[i]>base[j])                //앞쪽 원소가 더 크면
+ 329   3                  {
+ 330   4                      SWAP(base[i], base[j]); //교환
+ 331   4                  }
+ 332   3              }
+ 333   2          }
+ 334   1      }
+ 335          
+ 336          unsigned int ADC_Cal(unsigned int *adbuff)
+ 337          {
+ 338   1          unsigned char  k,m=0;
+ 339   1          unsigned int wad_data,j=0;
+ 340   1          
+ 341   1              j = 0xf000;
+ 342   1              for(k=0;k<6;k++)
+ 343   1              {   
+ 344   2                      if(adbuff[k] < j)       // Min data drop
+ 345   2                      {   
+ 346   3                              j = *(adbuff+k);
+ 347   3                      m = k;
+ 348   3                      }
+ 349   2              }
+ 350   1              adbuff[m] = 0;
+ 351   1              
+ 352   1              j = 0;
+ 353   1              for(k=0;k<6;k++)
+ 354   1              {   
+ 355   2                      if(adbuff[k] > j)               // Max data drop
+ 356   2                  {   
+ 357   3                              j = *(adbuff+k);
+ 358   3                      m = k;                  
+ 359   3                  }                           
+ 360   2              }                               
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 7   
+
+ 361   1              adbuff[m] = 0;                 
+ 362   1              
+ 363   1              j = 0;
+ 364   1              for(k=0;k<6;k++)  j += *(adbuff+k);
+ 365   1              wad_data = j>>2;                        // 4개 값 평균 구하기..
+ 366   1              
+ 367   1      return(wad_data);
+ 368   1      }       
+ 369          
+ 370          void ADC_Proc(void)                     // 1read cycle = 4ms
+ 371          {
+ 372   1              unsigned int adc;
+ 373   1              if( Start_DlyTimer || System_Error ) 
+ 374   1              {
+ 375   2                      ADC_Index=0;
+ 376   2                      ADC_OCRSum=0;
+ 377   2                      ADC_Min_sampling=0;
+ 378   2                      ADC_Max_sampling=0;
+ 379   2                      ADC_Min_cnt = 0;
+ 380   2                      ADC_CMPOCR = 0;
+ 381   2                      ADC_CancelTimer = 0;
+ 382   2                      return;
+ 383   2              }       
+ 384   1                      
+ 385   1              if( ADC_Index < 6 )             // Conversion time cycle = 4ms x7 = 28ms
+ 386   1              {
+ 387   2                      ADC_start(cADCOCR);
+ 388   2                      adc = ADC_read();               // ADC 6회 읽기..
+ 389   2      //              adc = 0x123;
+ 390   2                      ADC_Buf0[ADC_Index] = adc;
+ 391   2                      ADC_Index++;
+ 392   2      
+ 393   2              }else if( ADC_Index == 6 )      // Conversion time cycle = 28ms
+ 394   1              {               
+ 395   2                      ADC_Index = 0;
+ 396   2                      adc = ADC_Cal(ADC_Buf0);
+ 397   2                      ADC_Buf[ADC_Counter] = adc;
+ 398   2                      ADC_OCRSum += adc;
+ 399   2                      
+ 400   2                      if(++ADC_Counter > 15)  // Conversion time cycle = 28ms x 32 = 0.896ms
+ 401   2                      {
+ 402   3                              ADC_Counter=0;
+ 403   3      
+ 404   3                          SequenceSort(ADC_Buf, 16);
+ 405   3                          ADC_OCRResult = ADC_Buf[8];
+ 406   3      
+ 407   3                              if( fSYSTEM_Run )
+ 408   3                              {
+ 409   4                                      if( Dipkeyin != 4 )
+ 410   4                                      {       
+ 411   5                                              ADC_TGOCR = ADC_MOTCURRENT_DIP_TB[Motor_RPM];
+ 412   5                                              if( fCLEAN_Init ) ADC_TGOCR = ADC_MOTCURRENT_DIP_TB[5];
+ 413   5                                      }else
+ 414   4                                      {
+ 415   5                                              ADC_TGOCR = ADC_MOTCURRENT_DIP_TB1[Motor_RPM];
+ 416   5                                              if( fCLEAN_Init ) ADC_TGOCR = ADC_MOTCURRENT_DIP_TB1[5];
+ 417   5                                      }               
+ 418   4                                      
+ 419   4                                      if( ADC_CancelTimer > cS100MS1S )
+ 420   4                                      {       
+ 421   5                                              if( ADC_OCRResult > ADC_CMPOCR ) ADC_CMPOCR = ADC_OCRResult;
+ 422   5                                              if( ADC_OCRResult > cADCOCRL0S5A )
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 8   
+
+ 423   5                                              {
+ 424   6                                                      if( ADC_OCRResult < (ADC_CMPOCR- cADCOCRL0S5A) ) System_Error = 1;
+ 425   6                                              }                       
+ 426   5                                      }
+ 427   4                                      
+ 428   4                                      if( ADC_CancelTimer > cS100MS4S )
+ 429   4                                      {       
+ 430   5                                              ADC_CancelTimer = cS100MS5S;
+ 431   5                                              if( ADC_OCRResult < ADC_TGOCR ) ADC_Min_sampling++;
+ 432   5                                      }else 
+ 433   4                                      {
+ 434   5                                              ADC_Min_sampling = 0;
+ 435   5                                              ADC_CMPOCR = 0;
+ 436   5                                      }       
+ 437   4                              }else
+ 438   3                              {
+ 439   4                                      ADC_Min_sampling=0;
+ 440   4                                      ADC_CancelTimer = 0;
+ 441   4                                      ADC_CMPOCR = 0;
+ 442   4                              }                               
+ 443   3      
+ 444   3                              if( ADC_Min_cnt++ > 7 ) 
+ 445   3                              {
+ 446   4                                      if( ADC_Min_sampling > 3 ) 
+ 447   4                                      {
+ 448   5                                              System_Error = 1;
+ 449   5      //                                      System_Error = 2;
+ 450   5      //                                      fCHECK = ON;
+ 451   5                                      }               
+ 452   4                                      
+ 453   4                                      ADC_Min_cnt = 0;
+ 454   4                                      ADC_Min_sampling = 0;
+ 455   4                              }       
+ 456   3                      
+ 457   3                              if( Dipkeyin != 1 )
+ 458   3                              {       
+ 459   4                                      if( ADC_OCRResult > cADCOCRMAX ) ADC_Max_sampling++;
+ 460   4                                      else ADC_Max_sampling = 0;
+ 461   4                                                       
+ 462   4                                      if( ADC_Max_sampling > 6 ) 
+ 463   4                                      {
+ 464   5                                              ADC_Max_sampling = 0;
+ 465   5                                              System_Error = 1;
+ 466   5                                      }       
+ 467   4                              }
+ 468   3                      }
+ 469   2              }
+ 470   1      }
+ 471          
+ 472          void delay_xms(U_CHAR time)
+ 473          {
+ 474   1              U_CHAR i;
+ 475   1              while(time != 0)
+ 476   1              {
+ 477   2                      for(i = 0; i<150; i++)
+ 478   2                      {
+ 479   3                              NOP();
+ 480   3                              NOP();
+ 481   3                              NOP();
+ 482   3                      }
+ 483   2                      time--;
+ 484   2              }
+C51 COMPILER V9.00   MAIN                                                                  12/15/2021 14:01:25 PAGE 9   
+
+ 485   1      
+ 486   1      }
+ 487          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1454    ----
+   CONSTANT SIZE    =     44    ----
+   XDATA SIZE       =    213      15
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =     55    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

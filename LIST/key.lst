@@ -1,0 +1,377 @@
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE KEY
+OBJECT MODULE PLACED IN .\OUT\key.obj
+COMPILER INVOKED BY: c:\Keil\C51\BIN\C51.EXE SRC\key.C LARGE OMF2 ROM(COMPACT) OPTIMIZE(8,SPEED) DEBUG PRINT(.\LIST\key.
+                    -lst) OBJECT(.\OUT\key.obj)
+
+line level    source
+
+   1          /*      
+   2                  =================================================================
+   3                  = Copyright(C) 2009 KEIL CORPORATION All rights reserved                =
+   4                  =================================================================
+   5                  = Header file for SFR of ABOV(C51-Core)                                                 =
+   6                  = Micom         : ABOV[MC96F8316L]/32QFN                                                =
+   7                  = Main X-tal    : 16.0MHz(Internal OSC)                                                 =
+   8                  = Machine Cycle : 0.2us                                                                                 =
+   9                  = Subject       : define file (define.h)                                                =
+  10                  = Project       : Food Processor MACHINE                                                =
+  11                  = Bender        : XXX CO.,LTD                                                           =
+  12                  = Programmer    : Gstrading / KJLEE                                                             =
+  13                  = Rev                   : 19.01.16                                                                              =
+  14                  = Date                  : Start[19.01.16] ~ End[19.01.xx]                               =
+  15                  =================================================================
+  16          */
+  17          
+  18          #include <intrins.h>
+  19          #include "Typech.h"
+  20          #include "mc96f8316.h"
+  21          #include "define.h"
+  22          #include "func.h"
+  23          #include "ram.h"
+  24          
+  25          #define cKEYCHT         15      // Key Chatt counter value[6mm*20=120ms]-Speed key
+  26          #define cKEYCHT1        15      // Key Chatt counter value[6mm*20=120ms]- Foot & Run
+  27          #define cKEYCHT2        15      // Key Chatt counter value[6mm*20=120ms]- Limit
+  28          
+  29          /* Key part Start       */
+  30          void KeyAnaly(void);
+  31          char KeyChattering(void);
+  32          
+  33          void KeyAnaly1(void);
+  34          char KeyChattering1(void);
+  35          
+  36          void KeyAnaly2(void);
+  37          char KeyChattering2(void);
+  38          
+  39          /*      ==============================================================================  */
+  40          /*      ==============================================================================  */
+  41          /*      ==============================================================================  */
+  42          void    Key_Proc(void)
+  43          {
+  44   1              if(!KeyChattering())    KeyAnaly();
+  45   1      }
+  46          
+  47          char    KeyChattering(void)
+  48          {
+  49   1              unsigned char x;
+  50   1              
+  51   1              if(Wchact == 0) Wchact = cKEYCHT;
+  52   1              
+  53   1              P2IO = 0xEF;    // P24(in) direction
+  54   1              P2PU = 0x00;            // pullup
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 2   
+
+  55   1              P2OD = 0x10;            // open drain
+  56   1              
+  57   1              for(x=0;x<50;x++)       NOP();
+  58   1              
+  59   1              x = 0;  
+  60   1              if( !PI_TACTKEY ) x = 1;
+  61   1                                              
+  62   1              P2IO = 0xFF;    // P24(out) direction
+  63   1              P2PU = 0x00;            // pullup
+  64   1              P2OD = 0x00;            // open drain
+  65   1              if(x != Wkeyin)
+  66   1              {
+  67   2                      Wkeyin = x;
+  68   2                      Wchact = cKEYCHT;
+  69   2              }
+  70   1      return(--Wchact);
+  71   1      }
+  72          
+  73          void    KeyAnaly(void)
+  74          {
+  75   1              keyin = Wkeyin;
+  76   1              fKEY_Init = ON;
+  77   1                      
+  78   1              switch( keyin )
+  79   1              {
+  80   2                      case 0:         // Not key
+  81   2                              fKEYFREE = OFF;
+  82   2                              Clean_KeyTimer=0;
+  83   2                              break;
+  84   2      
+  85   2                      case 1:         // Power key
+  86   2                              if( fKEYFREE || fCLEAN_Init ) break;
+  87   2                              fKEYFREE = ON;
+  88   2      
+  89   2                              ADC_Index=0;
+  90   2                              ADC_OCRSum=0;
+  91   2                              ADC_Min_sampling=0;
+  92   2                              ADC_Max_sampling=0;
+  93   2                              ADC_Min_cnt = 0;
+  94   2                              ADC_CMPOCR = 0;
+  95   2                              ADC_CancelTimer = 0;
+  96   2      
+  97   2                              if( Motor_RPM < 4 ) Motor_RPM++;
+  98   2                              else 
+  99   2                              {
+ 100   3                                      Motor_RPM = 0;
+ 101   3                              }       
+ 102   2                              break;
+ 103   2      
+ 104   2                      default :       // no defined key
+ 105   2                              break;
+ 106   2              }
+ 107   1      }
+ 108          
+ 109          
+ 110          void    Key_Proc1(void)         // 4ms x 15 = 60ms
+ 111          {
+ 112   1              if(!KeyChattering1())   KeyAnaly1();
+ 113   1              if(!KeyChattering2())   KeyAnaly2();
+ 114   1      }
+ 115          
+ 116          /**/
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 3   
+
+ 117          /*             key data Routine                                                                */
+ 118          /*-----------------------------------------------------*/
+ 119          /*             4:run                                                                                   */
+ 120          /*             2:foot                                                                                  */
+ 121          /*             1:Limit                                                                                 */
+ 122          /**/
+ 123          char    KeyChattering1(void)
+ 124          {
+ 125   1              unsigned char x;
+ 126   1              
+ 127   1              if(Wchact1 == 0)        Wchact1 = cKEYCHT1;
+ 128   1              
+ 129   1              x = PI_KEY;
+ 130   1              x >>= 4;
+ 131   1              x &= 0x03;
+ 132   1              x ^= 0x03;
+ 133   1                                              
+ 134   1              if(x != Wkeyin1)
+ 135   1              {
+ 136   2                      Wkeyin1 = x;
+ 137   2                      Wchact1 = cKEYCHT1;
+ 138   2              }
+ 139   1      return(--Wchact1);
+ 140   1      }
+ 141          
+ 142          void    KeyAnaly1(void)
+ 143          {
+ 144   1              keyin1 = Wkeyin1;
+ 145   1                      
+ 146   1              switch( keyin1 )
+ 147   1              {
+ 148   2                      case 0:         // Not key
+ 149   2      //                      if( System_Error == 2 ) 
+ 150   2      //                      {
+ 151   2      //                              System_Error = 0;
+ 152   2      //                              fRUN = OFF;
+ 153   2      //                      }       
+ 154   2      
+ 155   2                              Mode_KeyTimer = 0;
+ 156   2                              fFOOT = OFF;    
+ 157   2                              fAUTOOFF_Init = OFF;
+ 158   2                                      
+ 159   2                              if( Mode_Key == cNORMAL_MODE )  // 누를때만 동작하는모드...
+ 160   2                              {         
+ 161   3                                      fRUN = OFF;
+ 162   3                                      if( fKEYFREE1)
+ 163   3                                      {       
+ 164   4                                              fAUTOOFF_Init = OFF;
+ 165   4                                              Start_DlyTimer = cS100MS05S;
+ 166   4                                              timer1_stop();
+ 167   4                                      }
+ 168   3                              }
+ 169   2                              fKEYFREE1 = OFF;
+ 170   2                              break;
+ 171   2      
+ 172   2                      case 1:         // Foot(pedal) key
+ 173   2                              if( !fREADY || System_Error ){ break; }
+ 174   2                              
+ 175   2                              if( fCLEAN_Init )
+ 176   2                              {
+ 177   3                                      if( fKEYFREE1) break;
+ 178   3                                      fKEYFREE1 = ON;
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 4   
+
+ 179   3                                      fCLEAN_Init=OFF;
+ 180   3                                      fRUN = OFF;
+ 181   3                                      fFOOT = OFF;
+ 182   3                                      timer1_stop();
+ 183   3                                      Start_DlyTimer = cS100MS03S;
+ 184   3                                      break;
+ 185   3                              }
+ 186   2                                      
+ 187   2                              if( fCLEAN_Standby && Disp_CleanTimer )
+ 188   2                              {
+ 189   3                                      fKEYFREE1 = ON;
+ 190   3                                      fCLEAN_Init = ON;
+ 191   3                                      fCLEAN_Standby = OFF;
+ 192   3                                      Disp_CleanTimer=0;
+ 193   3                                      Clean_Index=0;
+ 194   3                                      Clean_Timer=0;
+ 195   3                                      Start_DlyTimer = cS100MS05S;
+ 196   3                                      PO_RELAY = ON;
+ 197   3                                      break;
+ 198   3                              }       
+ 199   2      
+ 200   2                              if( fAUTOOFF_Init ) break;
+ 201   2      
+ 202   2                              fFOOT = ON;     
+ 203   2                              
+ 204   2                              if( fKEYFREE1) break;
+ 205   2                              fKEYFREE1 = ON;
+ 206   2      
+ 207   2                              if( fRUN )
+ 208   2                              {       
+ 209   3                                      fRUN = OFF;
+ 210   3                              }else
+ 211   2                              {
+ 212   3                                      Start_DlyTimer = cS100MS05S;
+ 213   3                                      timer1_stop();
+ 214   3                                      PO_RELAY = ON;
+ 215   3                                      fFLASH_SET = ON;
+ 216   3                              }               
+ 217   2                              fCHECK = OFF;
+ 218   2      
+ 219   2                              break;
+ 220   2                      case 2:         // Run key = 60ms interval
+ 221   2                              if( !fREADY || System_Error || fFOOT )
+ 222   2                              { 
+ 223   3                                      if( !fREADY )
+ 224   3                                      {
+ 225   4                                              if( fKEYFREE1) break;
+ 226   4                                              if( Mode_KeyTimer++ > 50 ) 
+ 227   4                                              {
+ 228   5                                                      fKEYFREE1 = ON;
+ 229   5                                                      Mode_Key ^= ON;
+ 230   5                                                      Disp_ModeTimer = cS100MS3S;
+ 231   5                                              }
+ 232   4                                      }                       
+ 233   3                                      
+ 234   3                                      break; 
+ 235   3                              }
+ 236   2                              
+ 237   2                              if( fCLEAN_Init )
+ 238   2                              {
+ 239   3                                      if( fKEYFREE1) break;
+ 240   3                                      fKEYFREE1 = ON;
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 5   
+
+ 241   3                                      fCLEAN_Init=OFF;
+ 242   3                                      fRUN = OFF;
+ 243   3                                      fFOOT = OFF;
+ 244   3                                      timer1_stop();
+ 245   3                                      Start_DlyTimer = cS100MS03S;
+ 246   3                                      break;
+ 247   3                              }       
+ 248   2                              
+ 249   2                              if( fCLEAN_Standby && Disp_CleanTimer )
+ 250   2                              {
+ 251   3                                      fKEYFREE1 = ON;
+ 252   3                                      fCLEAN_Init = ON;
+ 253   3                                      fCLEAN_Standby = OFF;
+ 254   3                                      Disp_CleanTimer=0;
+ 255   3                                      Clean_Index=0;
+ 256   3                                      Clean_Timer=0;
+ 257   3                                      Start_DlyTimer = cS100MS05S;
+ 258   3                                      PO_RELAY = ON;
+ 259   3                                      break;
+ 260   3                              }       
+ 261   2      
+ 262   2                              if( fAUTOOFF_Init ) break;
+ 263   2      
+ 264   2                              if( Mode_Key == cTOGGLE_MODE )
+ 265   2                              {         
+ 266   3                                      if( fKEYFREE1) break;
+ 267   3                                      fKEYFREE1 = ON;
+ 268   3                                      fRUN ^= ON;     
+ 269   3              
+ 270   3                                      fFLASH_SET = ON;
+ 271   3                                      Start_DlyTimer = cS100MS05S;
+ 272   3                                      timer1_stop();
+ 273   3                                      PO_RELAY = ON;
+ 274   3                              }else
+ 275   2                              {
+ 276   3                                      fRUN = ON;      
+ 277   3                                      
+ 278   3                                      if( fKEYFREE1) break;
+ 279   3                                      fKEYFREE1 = ON;
+ 280   3              
+ 281   3                                      if( fFOOT )
+ 282   3                                      {       
+ 283   4                                              fFOOT = OFF;
+ 284   4                                      }else
+ 285   3                                      {
+ 286   4                                              Start_DlyTimer = cS100MS05S;
+ 287   4                                              timer1_stop();
+ 288   4                                              PO_RELAY = ON;
+ 289   4                                              fFLASH_SET = ON;
+ 290   4                                      }               
+ 291   3                              }               
+ 292   2                              fCHECK = OFF;
+ 293   2                              break;
+ 294   2      
+ 295   2                      default :       // no defined key
+ 296   2                              break;
+ 297   2              }
+ 298   1      }
+ 299          
+ 300          /**/
+ 301          /*             key data Routine                                                                */
+ 302          /*-----------------------------------------------------*/
+C51 COMPILER V9.00   KEY                                                                   12/09/2021 13:13:38 PAGE 6   
+
+ 303          /*             4:run                                                                                   */
+ 304          /*             2:foot                                                                                  */
+ 305          /*             1:Limit                                                                                 */
+ 306          /**/
+ 307          char    KeyChattering2(void)
+ 308          {
+ 309   1              unsigned char x;
+ 310   1              
+ 311   1              if(Wchact2 == 0)        Wchact2 = cKEYCHT2;
+ 312   1              
+ 313   1              x = 0;
+ 314   1              if( !PI_LIMIT ) x = 1;
+ 315   1                                              
+ 316   1              if(x != Wkeyin2)
+ 317   1              {
+ 318   2                      Wkeyin2 = x;
+ 319   2                      Wchact2 = cKEYCHT2;
+ 320   2              }
+ 321   1      return(--Wchact2);
+ 322   1      }
+ 323          
+ 324          void    KeyAnaly2(void)
+ 325          {
+ 326   1              keyin2 = Wkeyin2;
+ 327   1      
+ 328   1              if( keyin2 ) fREADY = ON;
+ 329   1              else 
+ 330   1              {
+ 331   2                      fREADY = OFF;
+ 332   2                      System_Error = 0;
+ 333   2                      fCHECK = OFF;
+ 334   2                      fCLEAN_Init=OFF;
+ 335   2              }
+ 336   1      }
+ 337          
+ 338          
+ 339          /*      EOF     */                              
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    780    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
